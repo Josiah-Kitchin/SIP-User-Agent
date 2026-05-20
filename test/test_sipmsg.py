@@ -29,7 +29,7 @@ def test_parse_via_header_line():
         "SIP/2.0/UDP 192.168.55.1:7800;branch=z9hG4bK776asdhds"
     )
 
-    assert via_header.transport == sipmsg.Transport.UDP
+    assert via_header.transport == sipmsg.TransportType.UDP
     assert via_header.host == "192.168.55.1:7800"
     assert via_header.branch == "z9hG4bK776asdhds"
 
@@ -132,6 +132,7 @@ def test_parse_sip_response():
     ]:
         assert header in res.headers
 
-    assert " hi" == res.unknown_headers["Unknown"]
+    assert " hi" == res.unknown_headers["Unknown"][0]
+
 
 

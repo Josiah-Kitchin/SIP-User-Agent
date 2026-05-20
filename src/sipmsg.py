@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from collections import defaultdict
 
 
 class SIPParseException(Exception):
@@ -18,9 +19,11 @@ class SIPRequestType(Enum):
 
 class SIPResponseType(Enum):
     RINGING = 180
+    TRYING = 100
+    OK = 200
 
 
-class Transport(Enum):
+class TransportType(Enum):
     UDP = "UDP"
     TCP = "TCP"
 
@@ -42,7 +45,7 @@ class HeaderType(Enum):
 
 @dataclass
 class ViaHeaderLine(HeaderLine):
-    transport: Transport
+    transport: TransportType
     host: str
     branch: str
 
@@ -95,15 +98,15 @@ class ContentLengthHeaderLine(HeaderLine):
 @dataclass
 class SIPRequest:
     req_type: SIPRequestType
-    headers: dict[HeaderType, HeaderLine]
-    unknown_headers: dict[str, str]
+    headers: defaultdict[HeaderType, list[HeaderLine]]
+    unknown_headers: defaultdict[str, list[str]]
 
 
 @dataclass
 class SIPResponse:
     res_type: SIPResponseType
-    headers: dict[HeaderType, HeaderLine]
-    unknown_headers: dict[str, str]
+    headers: defaultdict[HeaderType, list[HeaderLine]]
+    unknown_headers: defaultdict[str, list[str]]
 
 
 def parse_via_header_line(header_value: str) -> ViaHeaderLine:
@@ -119,7 +122,7 @@ def parse_via_header_line(header_value: str) -> ViaHeaderLine:
         raise ValueError("Expected value missing")
 
     return ViaHeaderLine(
-        transport=Transport(transport),
+        transport=TransportType(transport),
         host=host,
         branch=branch_val,
     )
@@ -174,9 +177,9 @@ def parse_contact_header_line(header_value: str) -> ContactHeaderLine:
 
 def parse_headers(
     header_lines: list[str],
-) -> tuple[dict[HeaderType, HeaderLine], dict[str, str]]:
-    parsed_headers = {}
-    unknown_headers = {}
+) -> tuple[defaultdict[HeaderType, list[HeaderLine]], defaultdict[str, list[str]]]:
+    parsed_headers = defaultdict(list)
+    unknown_headers = defaultdict(list)
     for line in header_lines:
         split_header = line.split(":", 1)
         split_header[0] = split_header[0].strip()
@@ -190,33 +193,33 @@ def parse_headers(
         try:
             header_type = HeaderType(header_type_str)
         except ValueError:
-            unknown_headers[header_type_str] = header_value
+            unknown_headers[header_type_str].append(header_value)
             continue
 
         try:
             match header_type:
                 case HeaderType.VIA:
-                    parsed_headers[header_type] = parse_via_header_line(header_value)
+                    parsed_headers[header_type].append(parse_via_header_line(header_value))
                 case HeaderType.MAX_FORWARDS:
-                    parsed_headers[header_type] = MaxForwardsLine(int(header_value))
+                    parsed_headers[header_type].append(MaxForwardsLine(int(header_value)))
                 case HeaderType.TO:
-                    parsed_headers[header_type] = parse_to_header_line(header_value)
+                    parsed_headers[header_type].append(parse_to_header_line(header_value))
                 case HeaderType.FROM:
-                    parsed_headers[header_type] = parse_from_header_line(header_value)
+                    parsed_headers[header_type].append(parse_from_header_line(header_value))
                 case HeaderType.CALL_ID:
-                    parsed_headers[header_type] = header_value
+                    parsed_headers[header_type].append(header_value)
                 case HeaderType.CSEQ:
-                    parsed_headers[header_type] = parse_c_seq_header_line(header_value)
+                    parsed_headers[header_type].append(parse_c_seq_header_line(header_value))
                 case HeaderType.CONTACT:
-                    parsed_headers[header_type] = parse_contact_header_line(
+                    parsed_headers[header_type].append(parse_contact_header_line(
                         header_value
-                    )
+                    ))
                 case HeaderType.CONTENT_TYPE:
-                    parsed_headers[header_type] = ContentTypeHeaderLine(header_value)
+                    parsed_headers[header_type].append(ContentTypeHeaderLine(header_value))
                 case HeaderType.CONTENT_LENGTH:
-                    parsed_headers[header_type] = ContentLengthHeaderLine(
+                    parsed_headers[header_type].append(ContentLengthHeaderLine(
                         int(header_value)
-                    )
+                    ))
 
         except Exception as e:
             raise SIPParseException(
@@ -268,6 +271,7 @@ def parse_sip_response(msg: str) -> SIPResponse:
         headers=headers,
         unknown_headers=unknown_headers,
     )
+
 
 
 
